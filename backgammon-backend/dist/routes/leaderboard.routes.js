@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const leaderboard_controller_1 = require("../controllers/leaderboard.controller");
+const auth_middleware_1 = require("../middleware/auth.middleware");
+const router = (0, express_1.Router)();
+router.get('/', auth_middleware_1.optionalAuth, leaderboard_controller_1.leaderboardController.getGlobal.bind(leaderboard_controller_1.leaderboardController));
+router.get('/me', auth_middleware_1.authMiddleware, leaderboard_controller_1.leaderboardController.getUserRank.bind(leaderboard_controller_1.leaderboardController));
+router.get('/around-me', auth_middleware_1.authMiddleware, leaderboard_controller_1.leaderboardController.getAroundMe.bind(leaderboard_controller_1.leaderboardController));
+exports.default = router;
