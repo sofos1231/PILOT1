@@ -1,0 +1,9 @@
+Hi there! 👋
+
+Welcome to this repository!
+
+This is a friendly greeting for all the coders who open this repo.
+Feel free to explore and contribute!
+
+Happy coding! 💻
+
