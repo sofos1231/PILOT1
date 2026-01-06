@@ -17,7 +17,7 @@ import { Platform } from 'react-native';
  */
 
 // ==================== DEVELOPMENT CONFIG ====================
-const DEV_API_HOST = '10.0.0.14'; // <-- UPDATE THIS with your local IP!
+const DEV_API_HOST = '10.0.0.71'; // <-- UPDATE THIS with your local IP!
 const DEV_API_PORT = '8000';
 
 // ==================== PRODUCTION CONFIG ====================
