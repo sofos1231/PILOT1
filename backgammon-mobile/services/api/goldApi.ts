@@ -99,6 +99,18 @@ export const goldApi = {
     apiClient.post<PurchaseConfirmResponse>('/gold/purchase/confirm', {
       payment_intent_id: paymentIntentId,
     }),
+
+  /**
+   * Demo purchase for testing (no real payment)
+   */
+  demoPurchase: (packageId: string) =>
+    apiClient.post<{
+      success: boolean;
+      message: string;
+      gold_added: number;
+      new_balance: number;
+    }>('/gold/demo-purchase', { packageId }),
+
 };
 
 export default goldApi;

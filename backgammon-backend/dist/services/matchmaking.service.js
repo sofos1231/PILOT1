@@ -4,18 +4,18 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.matchmakingService = exports.MatchmakingService = void 0;
+exports.startQueueProcessor = startQueueProcessor;
+exports.stopQueueProcessor = stopQueueProcessor;
 const connection_1 = __importDefault(require("../db/connection"));
 const matchmaking_repository_1 = require("../repositories/matchmaking.repository");
 const users_repository_1 = require("../repositories/users.repository");
 const game_engine_service_1 = require("./game-engine.service");
 const websocket_1 = require("../websocket");
 const AppError_1 = require("../errors/AppError");
+// Track if queue processor is running
+let queueProcessorInterval = null;
 class MatchmakingService {
-    /**
-     * Join matchmaking queue
-     */
     async joinQueue(userId, stakeAmount, matchType = 'gold', clubId) {
-        // Validate user has enough gold/chips
         const user = await users_repository_1.usersRepository.findById(userId);
         if (!user) {
             throw new AppError_1.NotFoundError('User');
@@ -23,24 +23,20 @@ class MatchmakingService {
         if (matchType === 'gold' && user.gold_balance < stakeAmount) {
             throw new AppError_1.ValidationError(`Insufficient gold. You have ${user.gold_balance}, need ${stakeAmount}`);
         }
-        // For club matches, validate chip balance
         if (matchType === 'club' && clubId) {
             const membership = await connection_1.default.query('SELECT chip_balance FROM club_memberships WHERE club_id = $1 AND user_id = $2', [clubId, userId]);
             if (!membership.rows[0] || membership.rows[0].chip_balance < stakeAmount) {
                 throw new AppError_1.ValidationError('Insufficient chips for this stake');
             }
         }
-        // Add to queue
         const queueEntry = await matchmaking_repository_1.matchmakingRepository.addToQueue({
             user_id: userId,
             stake_amount: stakeAmount,
             match_type: matchType,
             club_id: clubId,
         });
-        // Try to find immediate match
         const opponent = await matchmaking_repository_1.matchmakingRepository.findMatch(queueEntry);
         if (opponent) {
-            // Match found! Create the match
             const match = await this.createMatchFromQueue(queueEntry, opponent);
             return {
                 matched: true,
@@ -53,27 +49,20 @@ class MatchmakingService {
                 },
             };
         }
-        // No immediate match, return queue position
         const position = await matchmaking_repository_1.matchmakingRepository.getQueuePosition(queueEntry);
         return {
             matched: false,
             queue_position: position,
-            estimated_wait: position * 15, // Rough estimate: 15 seconds per position
+            estimated_wait: position * 15,
         };
     }
-    /**
-     * Create match from two queue entries
-     */
     async createMatchFromQueue(entry1, entry2) {
         const client = await connection_1.default.connect();
         try {
             await client.query('BEGIN');
-            // Randomly assign colors
             const whitePlayer = Math.random() < 0.5 ? entry1.user_id : entry2.user_id;
             const blackPlayer = whitePlayer === entry1.user_id ? entry2.user_id : entry1.user_id;
-            // Initialize game state
             const initialState = game_engine_service_1.gameEngineService.initializeGame();
-            // Create match
             const matchResult = await client.query(`INSERT INTO matches
          (match_type, status, player_white_id, player_black_id, stake_amount, club_id, game_state)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -87,11 +76,9 @@ class MatchmakingService {
                 JSON.stringify(initialState),
             ]);
             const match = matchResult.rows[0];
-            // Update both queue entries
             await client.query("UPDATE matchmaking_queue SET status = 'matched', matched_with_user_id = $1, match_id = $2 WHERE queue_id = $3", [entry2.user_id, match.match_id, entry1.queue_id]);
             await client.query("UPDATE matchmaking_queue SET status = 'matched', matched_with_user_id = $1, match_id = $2 WHERE queue_id = $3", [entry1.user_id, match.match_id, entry2.queue_id]);
             await client.query('COMMIT');
-            // Notify both players via WebSocket
             const whiteUser = await users_repository_1.usersRepository.findById(whitePlayer);
             const blackUser = await users_repository_1.usersRepository.findById(blackPlayer);
             if (!whiteUser || !blackUser) {
@@ -119,16 +106,10 @@ class MatchmakingService {
             client.release();
         }
     }
-    /**
-     * Leave matchmaking queue
-     */
     async leaveQueue(userId) {
         const cancelled = await matchmaking_repository_1.matchmakingRepository.cancelQueue(userId);
         return cancelled;
     }
-    /**
-     * Get current queue status
-     */
     async getQueueStatus(userId) {
         const entry = await matchmaking_repository_1.matchmakingRepository.getQueueEntry(userId);
         if (!entry) {
@@ -141,13 +122,8 @@ class MatchmakingService {
             stake_amount: entry.stake_amount,
         };
     }
-    /**
-     * Background job: Try to match queued players
-     */
     async processQueue() {
-        // Clean expired entries first
         await matchmaking_repository_1.matchmakingRepository.cleanExpiredEntries();
-        // Get all waiting entries
         const result = await connection_1.default.query("SELECT * FROM matchmaking_queue WHERE status = 'waiting' AND expires_at > NOW() ORDER BY created_at ASC");
         let matchesCreated = 0;
         const processedIds = new Set();
@@ -167,12 +143,29 @@ class MatchmakingService {
 }
 exports.MatchmakingService = MatchmakingService;
 exports.matchmakingService = new MatchmakingService();
-// Start background queue processor (runs every 5 seconds)
-setInterval(async () => {
-    try {
-        await exports.matchmakingService.processQueue();
+function startQueueProcessor() {
+    if (queueProcessorInterval) {
+        console.log('Queue processor already running');
+        return;
     }
-    catch (error) {
-        console.error('Queue processor error:', error);
+    console.log('Starting matchmaking queue processor...');
+    queueProcessorInterval = setInterval(async () => {
+        try {
+            await exports.matchmakingService.processQueue();
+        }
+        catch (error) {
+            const msg = error?.message || '';
+            if (msg.includes('ECONNREFUSED') || msg.includes('Connection terminated') || msg.includes('connect')) {
+                return;
+            }
+            console.error('Queue processor error:', msg);
+        }
+    }, 5000);
+}
+function stopQueueProcessor() {
+    if (queueProcessorInterval) {
+        clearInterval(queueProcessorInterval);
+        queueProcessorInterval = null;
+        console.log('Queue processor stopped');
     }
-}, 5000);
+}

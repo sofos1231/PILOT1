@@ -358,6 +358,61 @@ class ClubsService {
         }
         await clubs_repository_1.clubsRepository.cancelTable(tableId);
     }
+    async joinTable(clubId, tableId, userId) {
+        // 1. Verify user is a member of this club
+        const membership = await clubs_repository_1.clubsRepository.getMembership(clubId, userId);
+        if (!membership) {
+            throw new AppError_1.ValidationError('You must be a club member to join tables');
+        }
+        // 2. Get the table
+        const table = await clubs_repository_1.clubsRepository.getTable(tableId);
+        if (!table || table.club_id !== clubId) {
+            throw new AppError_1.NotFoundError('Table');
+        }
+        // 3. Validate table state
+        if (table.status !== 'waiting') {
+            throw new AppError_1.ValidationError('This table is no longer available');
+        }
+        if (table.creator_user_id === userId) {
+            throw new AppError_1.ValidationError('You cannot join your own table');
+        }
+        // 4. Check user has enough chips
+        if (membership.chip_balance < table.stake_amount) {
+            throw new AppError_1.ValidationError(`Insufficient chips. You need ${table.stake_amount} chips to join this table.`);
+        }
+        // 5. Get creator's membership to verify they still have enough chips
+        const creatorMembership = await clubs_repository_1.clubsRepository.getMembership(clubId, table.creator_user_id);
+        if (!creatorMembership || creatorMembership.chip_balance < table.stake_amount) {
+            // Cancel the table if creator doesn't have enough chips anymore
+            await clubs_repository_1.clubsRepository.cancelTable(tableId);
+            throw new AppError_1.ValidationError('Table creator no longer has enough chips. Table has been cancelled.');
+        }
+        // 6. Use transaction for chip deductions and table update
+        const client = await connection_1.default.connect();
+        try {
+            await client.query('BEGIN');
+            // Deduct chips from joiner
+            await client.query('UPDATE club_memberships SET chip_balance = chip_balance - $1 WHERE club_id = $2 AND user_id = $3', [table.stake_amount, clubId, userId]);
+            // Deduct chips from creator
+            await client.query('UPDATE club_memberships SET chip_balance = chip_balance - $1 WHERE club_id = $2 AND user_id = $3', [table.stake_amount, clubId, table.creator_user_id]);
+            // Update table with opponent and change status to started
+            await client.query('UPDATE club_tables SET opponent_user_id = $1, status = $2, started_at = NOW() WHERE table_id = $3', [userId, 'started', tableId]);
+            await client.query('COMMIT');
+        }
+        catch (error) {
+            await client.query('ROLLBACK');
+            throw error;
+        }
+        finally {
+            client.release();
+        }
+        // 7. Return updated table
+        const updatedTable = await clubs_repository_1.clubsRepository.getTable(tableId);
+        if (!updatedTable) {
+            throw new AppError_1.NotFoundError('Table');
+        }
+        return updatedTable;
+    }
     // ===== LEADERBOARD =====
     async getLeaderboard(clubId, limit = 10) {
         await this.getClub(clubId);

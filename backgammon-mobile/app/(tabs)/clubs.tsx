@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import debounce from 'lodash/debounce';
 import { useClubStore } from '../../store/clubStore';
 import { Club, ClubWithMembership } from '../../types/club.types';
 
@@ -42,9 +43,23 @@ export default function ClubsTab() {
     setRefreshing(false);
   };
 
+  // Create debounced search function
+  const debouncedSearch = useCallback(
+    debounce((text: string) => {
+      if (text.trim()) {
+        searchClubs(text);
+      } else {
+        // Clear search results or fetch all clubs
+        searchClubs();
+      }
+    }, 400),
+    []
+  );
+
+  // Update handleSearch to use debounce
   const handleSearch = (text: string) => {
     setSearchQuery(text);
-    searchClubs(text);
+    debouncedSearch(text);
   };
 
   const renderMyClubItem = ({ item }: { item: ClubWithMembership }) => (
@@ -143,18 +158,21 @@ export default function ClubsTab() {
         </View>
       ) : data.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons
-            name={activeTab === 'my' ? 'people-outline' : 'search-outline'}
-            size={64}
-            color="#ccc"
-          />
+          <Text style={styles.emptyIcon}>
+            {activeTab === 'my' ? '👥' : searchQuery.trim() ? '🔍' : '🏠'}
+          </Text>
           <Text style={styles.emptyTitle}>
-            {activeTab === 'my' ? 'No Clubs Yet' : 'No Clubs Found'}
+            {activeTab === 'my'
+              ? 'No Clubs Yet'
+              : searchQuery.trim()
+              ? `No clubs matching "${searchQuery}"` : 'No Clubs Found'}
           </Text>
           <Text style={styles.emptySubtitle}>
             {activeTab === 'my'
               ? 'Join or create a club to get started!'
-              : 'Try a different search term'}
+              : searchQuery.trim()
+              ? 'Try a different search term'
+              : 'Be the first to create a club!'}
           </Text>
         </View>
       ) : (
@@ -212,6 +230,7 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, paddingVertical: 14, fontSize: 16, color: '#333' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  emptyIcon: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', marginTop: 16 },
   emptySubtitle: { fontSize: 14, color: '#666', marginTop: 8, textAlign: 'center' },
   listContent: { padding: 16, paddingTop: 0 },

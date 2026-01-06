@@ -115,32 +115,52 @@ export default function ShopTab() {
   };
 
   const handlePurchase = async (pkg: GoldPackage) => {
+    const bonusAmount = Math.floor(pkg.gold_amount * pkg.bonus_percent / 100);
+    const totalGold = pkg.gold_amount + bonusAmount;
+
     Alert.alert(
-      `Buy ${pkg.name}`,
-      `Purchase ${pkg.gold_amount.toLocaleString()} gold for $${pkg.price_usd.toFixed(2)}?${
-        pkg.bonus_percent > 0 ? `\n\nIncludes ${pkg.bonus_percent}% bonus!` : ''
-      }`,
+      'Confirm Purchase',
+      `Buy ${pkg.gold_amount.toLocaleString()} gold${bonusAmount > 0 ? ` (+${bonusAmount.toLocaleString()} bonus)` : ''} for $${pkg.price_usd.toFixed(2)}?`,
       [
-        { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Purchase',
+          text: 'Cancel',
+          style: 'cancel'
+        },
+        {
+          text: 'Buy Now',
           onPress: async () => {
             try {
-              // In production, this would:
-              // 1. Create payment intent
-              // 2. Open Stripe checkout
-              // 3. Confirm purchase on success
+              setLoading(true);
 
+              const { data: result } = await goldApi.demoPurchase(pkg.id);
+
+              // Update local balance
+              if (result.new_balance !== undefined && user) {
+                setUser({ ...user, gold_balance: result.new_balance });
+              } else {
+                // Refresh balance from server
+                await fetchData();
+              }
+
+              // Show success message
               Alert.alert(
-                'Stripe Integration Required',
-                'To enable real purchases:\n\n1. Add STRIPE_SECRET_KEY to backend .env\n2. Add Stripe publishable key to frontend\n3. Integrate Stripe React Native SDK\n\nThis is a demo placeholder.',
+                'Purchase Successful!',
+                `You received ${totalGold.toLocaleString()} gold!`,
                 [{ text: 'OK' }]
               );
+
             } catch (error: any) {
-              Alert.alert('Error', error.response?.data?.error || 'Purchase failed');
+              console.error('Purchase error:', error);
+              Alert.alert(
+                'Purchase Failed',
+                error.response?.data?.message || error.response?.data?.error || error.message || 'Please try again',
+                [{ text: 'OK' }]
+              );
+            } finally {
+              setLoading(false);
             }
-          },
-        },
+          }
+        }
       ]
     );
   };

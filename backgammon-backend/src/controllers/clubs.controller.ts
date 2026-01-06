@@ -223,6 +223,20 @@ export class ClubsController {
     }
   }
 
+  async joinTable(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { clubId, tableId } = req.params;
+      const result = await clubsService.joinTable(clubId, tableId, req.user!.userId);
+      res.status(200).json({
+        success: true,
+        message: 'Successfully joined table',
+        table: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   // ===== LEADERBOARD =====
 
   async getLeaderboard(req: Request, res: Response, next: NextFunction): Promise<void> {

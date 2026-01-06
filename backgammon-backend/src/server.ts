@@ -4,17 +4,23 @@ dotenv.config();
 import { createServer } from 'http';
 import app from './app';
 import { connectDatabase } from './db/connection';
-// WebSocket will be imported when Lane 4 is implemented:
 import { initializeWebSocket } from './websocket';
+import { startQueueProcessor } from './services/matchmaking.service';
 
 const PORT = process.env.PORT || 8000;
 
 async function startServer() {
   try {
     // Try to connect to database
+    let dbConnected = false;
     try {
-      await connectDatabase();
-      console.log('✅ Database connected');
+      const result = await connectDatabase();
+      dbConnected = result !== false;
+      if (dbConnected) {
+        console.log('✅ Database connected');
+        // Only start queue processor if DB is connected
+        startQueueProcessor();
+      }
     } catch (dbError) {
       console.warn('⚠️  Database connection failed - server will start without database');
       console.warn('   Some endpoints requiring database will not work');
@@ -24,7 +30,7 @@ async function startServer() {
     // Create HTTP server (needed for WebSocket)
     const server = createServer(app);
 
-    // Initialize WebSocket (uncomment when Lane 4 is complete)
+    // Initialize WebSocket
     initializeWebSocket(server);
     console.log('✅ WebSocket initialized');
 

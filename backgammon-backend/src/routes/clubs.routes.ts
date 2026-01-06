@@ -44,5 +44,6 @@ router.post('/:clubId/members/:userId/kick', clubsController.kickMember.bind(clu
 // Tables
 router.post('/:clubId/tables', validateRequest(createTableSchema), clubsController.createTable.bind(clubsController));
 router.post('/tables/:tableId/cancel', clubsController.cancelTable.bind(clubsController));
+router.post('/:clubId/tables/:tableId/join', clubsController.joinTable.bind(clubsController));
 
 export default router;

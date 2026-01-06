@@ -15,5 +15,6 @@ router.get('/transactions', goldController.getTransactions.bind(goldController))
 router.post('/daily-bonus/claim', goldController.claimDailyBonus.bind(goldController));
 router.post('/purchase/intent', validateRequest(createPurchaseIntentSchema), goldController.createPurchaseIntent.bind(goldController));
 router.post('/purchase/confirm', validateRequest(confirmPurchaseSchema), goldController.confirmPurchase.bind(goldController));
+router.post('/demo-purchase', goldController.demoPurchase.bind(goldController));
 
 export default router;

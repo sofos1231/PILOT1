@@ -7,17 +7,16 @@ import { wsUtils } from '../websocket';
 import { MatchmakingResult, QueueEntry } from '../types/matchmaking.types';
 import { ValidationError, NotFoundError } from '../errors/AppError';
 
+// Track if queue processor is running
+let queueProcessorInterval: NodeJS.Timeout | null = null;
+
 export class MatchmakingService {
-  /**
-   * Join matchmaking queue
-   */
   async joinQueue(
     userId: string,
     stakeAmount: number,
     matchType: 'gold' | 'club' = 'gold',
     clubId?: string
   ): Promise<MatchmakingResult> {
-    // Validate user has enough gold/chips
     const user = await usersRepository.findById(userId);
     if (!user) {
       throw new NotFoundError('User');
@@ -27,7 +26,6 @@ export class MatchmakingService {
       throw new ValidationError(`Insufficient gold. You have ${user.gold_balance}, need ${stakeAmount}`);
     }
 
-    // For club matches, validate chip balance
     if (matchType === 'club' && clubId) {
       const membership = await pool.query(
         'SELECT chip_balance FROM club_memberships WHERE club_id = $1 AND user_id = $2',
@@ -38,7 +36,6 @@ export class MatchmakingService {
       }
     }
 
-    // Add to queue
     const queueEntry = await matchmakingRepository.addToQueue({
       user_id: userId,
       stake_amount: stakeAmount,
@@ -46,11 +43,9 @@ export class MatchmakingService {
       club_id: clubId,
     });
 
-    // Try to find immediate match
     const opponent = await matchmakingRepository.findMatch(queueEntry);
 
     if (opponent) {
-      // Match found! Create the match
       const match = await this.createMatchFromQueue(queueEntry, opponent);
 
       return {
@@ -65,33 +60,26 @@ export class MatchmakingService {
       };
     }
 
-    // No immediate match, return queue position
     const position = await matchmakingRepository.getQueuePosition(queueEntry);
 
     return {
       matched: false,
       queue_position: position,
-      estimated_wait: position * 15, // Rough estimate: 15 seconds per position
+      estimated_wait: position * 15,
     };
   }
 
-  /**
-   * Create match from two queue entries
-   */
   private async createMatchFromQueue(entry1: QueueEntry, entry2: QueueEntry): Promise<any> {
     const client = await pool.connect();
 
     try {
       await client.query('BEGIN');
 
-      // Randomly assign colors
       const whitePlayer = Math.random() < 0.5 ? entry1.user_id : entry2.user_id;
       const blackPlayer = whitePlayer === entry1.user_id ? entry2.user_id : entry1.user_id;
 
-      // Initialize game state
       const initialState = gameEngineService.initializeGame();
 
-      // Create match
       const matchResult = await client.query(
         `INSERT INTO matches
          (match_type, status, player_white_id, player_black_id, stake_amount, club_id, game_state)
@@ -109,7 +97,6 @@ export class MatchmakingService {
       );
       const match = matchResult.rows[0];
 
-      // Update both queue entries
       await client.query(
         "UPDATE matchmaking_queue SET status = 'matched', matched_with_user_id = $1, match_id = $2 WHERE queue_id = $3",
         [entry2.user_id, match.match_id, entry1.queue_id]
@@ -121,7 +108,6 @@ export class MatchmakingService {
 
       await client.query('COMMIT');
 
-      // Notify both players via WebSocket
       const whiteUser = await usersRepository.findById(whitePlayer);
       const blackUser = await usersRepository.findById(blackPlayer);
 
@@ -153,17 +139,11 @@ export class MatchmakingService {
     }
   }
 
-  /**
-   * Leave matchmaking queue
-   */
   async leaveQueue(userId: string): Promise<boolean> {
     const cancelled = await matchmakingRepository.cancelQueue(userId);
     return cancelled;
   }
 
-  /**
-   * Get current queue status
-   */
   async getQueueStatus(userId: string): Promise<{ in_queue: boolean; position?: number; stake_amount?: number }> {
     const entry = await matchmakingRepository.getQueueEntry(userId);
 
@@ -180,14 +160,9 @@ export class MatchmakingService {
     };
   }
 
-  /**
-   * Background job: Try to match queued players
-   */
   async processQueue(): Promise<number> {
-    // Clean expired entries first
     await matchmakingRepository.cleanExpiredEntries();
 
-    // Get all waiting entries
     const result = await pool.query(
       "SELECT * FROM matchmaking_queue WHERE status = 'waiting' AND expires_at > NOW() ORDER BY created_at ASC"
     );
@@ -214,11 +189,30 @@ export class MatchmakingService {
 
 export const matchmakingService = new MatchmakingService();
 
-// Start background queue processor (runs every 5 seconds)
-setInterval(async () => {
-  try {
-    await matchmakingService.processQueue();
-  } catch (error) {
-    console.error('Queue processor error:', error);
+export function startQueueProcessor(): void {
+  if (queueProcessorInterval) {
+    console.log('Queue processor already running');
+    return;
   }
-}, 5000);
+
+  console.log('Starting matchmaking queue processor...');
+  queueProcessorInterval = setInterval(async () => {
+    try {
+      await matchmakingService.processQueue();
+    } catch (error: any) {
+      const msg = error?.message || '';
+      if (msg.includes('ECONNREFUSED') || msg.includes('Connection terminated') || msg.includes('connect')) {
+        return;
+      }
+      console.error('Queue processor error:', msg);
+    }
+  }, 5000);
+}
+
+export function stopQueueProcessor(): void {
+  if (queueProcessorInterval) {
+    clearInterval(queueProcessorInterval);
+    queueProcessorInterval = null;
+    console.log('Queue processor stopped');
+  }
+}

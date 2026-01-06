@@ -36,4 +36,5 @@ router.post('/:clubId/members/:userId/kick', clubs_controller_1.clubsController.
 // Tables
 router.post('/:clubId/tables', (0, validation_middleware_1.validateRequest)(club_validator_1.createTableSchema), clubs_controller_1.clubsController.createTable.bind(clubs_controller_1.clubsController));
 router.post('/tables/:tableId/cancel', clubs_controller_1.clubsController.cancelTable.bind(clubs_controller_1.clubsController));
+router.post('/:clubId/tables/:tableId/join', clubs_controller_1.clubsController.joinTable.bind(clubs_controller_1.clubsController));
 exports.default = router;

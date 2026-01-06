@@ -198,6 +198,20 @@ class ClubsController {
             next(error);
         }
     }
+    async joinTable(req, res, next) {
+        try {
+            const { clubId, tableId } = req.params;
+            const result = await clubs_service_1.clubsService.joinTable(clubId, tableId, req.user.userId);
+            res.status(200).json({
+                success: true,
+                message: 'Successfully joined table',
+                table: result
+            });
+        }
+        catch (error) {
+            next(error);
+        }
+    }
     // ===== LEADERBOARD =====
     async getLeaderboard(req, res, next) {
         try {
