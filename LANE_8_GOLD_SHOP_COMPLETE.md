@@ -1,3 +1,154 @@
+# 🪙 LANE 8: GOLD & SHOP SYSTEM - COMPLETE
+## Full Frontend Implementation for Gold Economy
+## Copy-Paste Ready Code
+
+---
+
+## OVERVIEW
+
+**Problem:** 
+- `goldApi.ts` does not exist in frontend
+- `shop.tsx` is a placeholder saying "Coming in Lane 5"
+- 6 backend endpoints have zero frontend integration
+- Daily bonus cannot be claimed
+- Users cannot see gold packages
+
+**Solution:**
+- Create goldApi.ts with all endpoint functions
+- Rewrite shop.tsx with full functionality
+- Wire everything together
+
+**Time:** 45 minutes
+
+**Prerequisites:**
+- Lane 1-7 complete
+- Backend running on port 8000
+- Frontend running in Expo
+
+---
+
+## PHASE 1: Create Gold API Service
+
+### Step 1.1: Create goldApi.ts
+
+Create file `services/api/goldApi.ts` in backgammon-mobile:
+
+```typescript
+import apiClient from './axiosInstance';
+
+// ==================== TYPES ====================
+
+export interface GoldPackage {
+  id: string;
+  name: string;
+  gold_amount: number;
+  price_usd: number;
+  bonus_percent: number;
+  popular?: boolean;
+}
+
+export interface GoldTransaction {
+  transaction_id: string;
+  user_id: string;
+  type: 'purchase' | 'match_win' | 'match_loss' | 'daily_bonus' | 'club_creation' | 'refund' | 'admin_grant';
+  amount: number;
+  balance_after: number;
+  description: string;
+  payment_intent_id?: string;
+  related_match_id?: string;
+  related_club_id?: string;
+  created_at: string;
+}
+
+export interface GoldBalance {
+  balance: number;
+  last_daily_bonus_claim: string | null;
+  can_claim_daily_bonus: boolean;
+}
+
+export interface DailyBonusResponse {
+  success: boolean;
+  amount: number;
+  new_balance: number;
+  next_claim_at: string;
+}
+
+export interface PurchaseIntentResponse {
+  success: boolean;
+  client_secret: string;
+  payment_intent_id: string;
+  amount_usd: number;
+  gold_amount: number;
+}
+
+export interface PurchaseConfirmResponse {
+  success: boolean;
+  gold_added: number;
+  new_balance: number;
+  transaction_id: string;
+}
+
+// ==================== API FUNCTIONS ====================
+
+export const goldApi = {
+  /**
+   * Get user's current gold balance and daily bonus status
+   */
+  getBalance: () =>
+    apiClient.get<{ success: boolean; balance: number; can_claim_daily_bonus: boolean }>(
+      '/gold/balance'
+    ),
+
+  /**
+   * Get available gold packages for purchase
+   */
+  getPackages: () =>
+    apiClient.get<{ success: boolean; packages: GoldPackage[] }>('/gold/packages'),
+
+  /**
+   * Get user's gold transaction history
+   */
+  getTransactions: (limit: number = 50, offset: number = 0) =>
+    apiClient.get<{ success: boolean; transactions: GoldTransaction[]; total: number }>(
+      '/gold/transactions',
+      { params: { limit, offset } }
+    ),
+
+  /**
+   * Claim daily bonus (500 gold, once per day)
+   */
+  claimDailyBonus: () =>
+    apiClient.post<DailyBonusResponse>('/gold/daily-bonus/claim'),
+
+  /**
+   * Create Stripe payment intent for gold purchase
+   */
+  createPurchaseIntent: (packageId: string) =>
+    apiClient.post<PurchaseIntentResponse>('/gold/purchase/intent', {
+      package_id: packageId,
+    }),
+
+  /**
+   * Confirm purchase after Stripe payment completes
+   */
+  confirmPurchase: (paymentIntentId: string) =>
+    apiClient.post<PurchaseConfirmResponse>('/gold/purchase/confirm', {
+      payment_intent_id: paymentIntentId,
+    }),
+};
+
+export default goldApi;
+```
+
+---
+
+## PHASE 2: Rewrite Shop Screen
+
+### Step 2.1: Replace shop.tsx
+
+Replace the entire contents of `app/(tabs)/shop.tsx`:
+
+```typescript
 import { useEffect, useState, useCallback } from 'react';
 import {
   View,
@@ -95,7 +246,7 @@ export default function ShopTab() {
         setCanClaimBonus(false);
 
         Alert.alert(
-          'Daily Bonus Claimed!',
+          '🎁 Daily Bonus Claimed!',
           `You received ${data.amount.toLocaleString()} gold!\n\nNew balance: ${data.new_balance.toLocaleString()} gold`,
           [{ text: 'Awesome!' }]
         );
@@ -118,7 +269,7 @@ export default function ShopTab() {
     Alert.alert(
       `Buy ${pkg.name}`,
       `Purchase ${pkg.gold_amount.toLocaleString()} gold for $${pkg.price_usd.toFixed(2)}?${
-        pkg.bonus_percent > 0 ? `\n\nIncludes ${pkg.bonus_percent}% bonus!` : ''
+        pkg.bonus_percent > 0 ? `\n\n🎁 Includes ${pkg.bonus_percent}% bonus!` : ''
       }`,
       [
         { text: 'Cancel', style: 'cancel' },
@@ -130,7 +281,7 @@ export default function ShopTab() {
               // 1. Create payment intent
               // 2. Open Stripe checkout
               // 3. Confirm purchase on success
-
+              
               Alert.alert(
                 'Stripe Integration Required',
                 'To enable real purchases:\n\n1. Add STRIPE_SECRET_KEY to backend .env\n2. Add Stripe publishable key to frontend\n3. Integrate Stripe React Native SDK\n\nThis is a demo placeholder.',
@@ -206,7 +357,7 @@ export default function ShopTab() {
         >
           <Text style={styles.balanceLabel}>Your Gold Balance</Text>
           <Text style={styles.balanceValue}>
-            {(user?.gold_balance || 0).toLocaleString()} Gold
+            🪙 {(user?.gold_balance || 0).toLocaleString()}
           </Text>
           <TouchableOpacity
             style={styles.historyButton}
@@ -244,7 +395,7 @@ export default function ShopTab() {
               ) : (
                 <>
                   <View style={styles.bonusLeft}>
-                    <Text style={styles.bonusEmoji}>*</Text>
+                    <Text style={styles.bonusEmoji}>🎁</Text>
                     <View>
                       <Text style={styles.bonusTitle}>
                         {canClaimBonus ? 'Claim Your Bonus!' : 'Already Claimed'}
@@ -258,7 +409,7 @@ export default function ShopTab() {
                   </View>
                   <View style={styles.bonusRight}>
                     <Text style={styles.bonusAmount}>+500</Text>
-                    <Ionicons name="diamond" size={20} color="white" />
+                    <Text style={styles.bonusGold}>🪙</Text>
                   </View>
                 </>
               )}
@@ -295,7 +446,7 @@ export default function ShopTab() {
                   <Text style={styles.packageName}>{pkg.name}</Text>
                   <View style={styles.packageGoldRow}>
                     <Text style={styles.packageGold}>
-                      {pkg.gold_amount.toLocaleString()} Gold
+                      🪙 {pkg.gold_amount.toLocaleString()}
                     </Text>
                     {pkg.bonus_percent > 0 && (
                       <View style={styles.bonusBadge}>
@@ -522,6 +673,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: 'white',
   },
+  bonusGold: {
+    fontSize: 20,
+  },
 
   // Packages
   emptyPackages: {
@@ -701,3 +855,198 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+```
+
+---
+
+## PHASE 3: Update Auth Store (if needed)
+
+### Step 3.1: Ensure setUser is available
+
+Check `store/authStore.ts` has `setUser` function. If not, add it:
+
+```typescript
+// In the store interface, ensure this exists:
+setUser: (user: User) => void;
+
+// In the store implementation, ensure this exists:
+setUser: (user) => set({ user }),
+
+// Also add updateGoldBalance if not present:
+updateGoldBalance: (newBalance: number) => 
+  set((state) => ({
+    user: state.user ? { ...state.user, gold_balance: newBalance } : null,
+  })),
+```
+
+**Complete authStore.ts reference** (update if yours is different):
+
+```typescript
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { authApi } from '../services/api/authApi';
+
+export interface User {
+  user_id: string;
+  email: string;
+  username: string;
+  avatar_url: string | null;
+  country: string;
+  gold_balance: number;
+  level: number;
+  xp: number;
+  total_matches: number;
+  wins: number;
+  losses: number;
+  total_gold_earned: number;
+  total_gold_spent: number;
+  is_active: boolean;
+  is_banned: boolean;
+  email_verified: boolean;
+  last_daily_bonus_claim: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+interface AuthState {
+  user: User | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  isHydrated: boolean;
+
+  // Actions
+  setUser: (user: User) => void;
+  setTokens: (accessToken: string, refreshToken: string) => void;
+  setAuthenticated: (user: User, accessToken: string, refreshToken: string) => void;
+  updateGoldBalance: (newBalance: number) => void;
+  logout: () => Promise<void>;
+  setHydrated: (hydrated: boolean) => void;
+}
+
+export const useAuthStore = create<AuthState>()(
+  persist(
+    (set, get) => ({
+      user: null,
+      accessToken: null,
+      refreshToken: null,
+      isAuthenticated: false,
+      isLoading: false,
+      isHydrated: false,
+
+      setUser: (user) => set({ user }),
+
+      setTokens: (accessToken, refreshToken) =>
+        set({ accessToken, refreshToken }),
+
+      setAuthenticated: (user, accessToken, refreshToken) =>
+        set({
+          user,
+          accessToken,
+          refreshToken,
+          isAuthenticated: true,
+        }),
+
+      updateGoldBalance: (newBalance) =>
+        set((state) => ({
+          user: state.user ? { ...state.user, gold_balance: newBalance } : null,
+        })),
+
+      logout: async () => {
+        try {
+          await authApi.logout();
+        } catch (error) {
+          console.error('Logout error:', error);
+        } finally {
+          set({
+            user: null,
+            accessToken: null,
+            refreshToken: null,
+            isAuthenticated: false,
+          });
+        }
+      },
+
+      setHydrated: (hydrated) => set({ isHydrated: hydrated }),
+    }),
+    {
+      name: 'auth-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+      onRehydrateStorage: () => (state) => {
+        state?.setHydrated(true);
+      },
+      partialize: (state) => ({
+        user: state.user,
+        accessToken: state.accessToken,
+        refreshToken: state.refreshToken,
+        isAuthenticated: state.isAuthenticated,
+      }),
+    }
+  )
+);
+```
+
+---
+
+## PHASE 4: Verify Backend Endpoints
+
+### Step 4.1: Test Gold Endpoints
+
+Run these curl commands to verify backend works:
+
+```bash
+# Get your token first (login)
+TOKEN="your_access_token_here"
+
+# Test balance endpoint
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/v1/gold/balance
+
+# Test packages endpoint
+curl http://localhost:8000/v1/gold/packages
+
+# Test daily bonus claim
+curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:8000/v1/gold/daily-bonus/claim
+
+# Test transactions
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/v1/gold/transactions
+```
+
+---
+
+## ✅ LANE 8 VERIFICATION CHECKLIST
+
+After implementing, verify:
+
+- [ ] `services/api/goldApi.ts` exists
+- [ ] Shop tab loads without errors
+- [ ] Gold balance displays correctly
+- [ ] Gold packages appear in list
+- [ ] Daily bonus button is visible
+- [ ] Clicking daily bonus shows success or "already claimed"
+- [ ] Transaction history modal opens
+- [ ] Pull-to-refresh works
+- [ ] Balance updates after claiming bonus
+
+---
+
+## 📁 FILES CREATED/MODIFIED
+
+| File | Action |
+|------|--------|
+| `services/api/goldApi.ts` | CREATE |
+| `app/(tabs)/shop.tsx` | REPLACE |
+| `store/authStore.ts` | UPDATE (if needed) |
+
+---
+
+## 🚀 READY FOR LANE 9
+
+After Lane 8 is complete:
+- Shop displays real gold packages
+- Daily bonus can be claimed
+- Transaction history is viewable
+- Gold balance updates properly
+
+Proceed to **Lane 9: Profile & User Data**

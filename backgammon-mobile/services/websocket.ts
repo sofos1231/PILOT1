@@ -221,6 +221,19 @@ class WebSocketService {
     this.socket?.emit('send_chat_message', { club_id: clubId, content });
   }
 
+  // Alias methods for club actions
+  joinClub(clubId: string): void {
+    this.joinClubRoom(clubId);
+  }
+
+  leaveClub(clubId: string): void {
+    this.leaveClubRoom(clubId);
+  }
+
+  sendClubMessage(clubId: string, message: string): void {
+    this.sendChatMessage(clubId, message);
+  }
+
   // ===== UTILITY =====
 
   isConnected(): boolean {

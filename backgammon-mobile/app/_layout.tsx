@@ -4,6 +4,8 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useAuthStore } from '../store/authStore';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { ErrorBoundary } from '../components/ErrorBoundary';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
 
 function LoadingScreen() {
   return (
@@ -21,6 +23,9 @@ export default function RootLayout() {
 
   // Initialize WebSocket connection when authenticated
   useWebSocket();
+
+  // Monitor network status
+  useNetworkStatus(true);
 
   // Handle navigation based on auth state
   useEffect(() => {
@@ -43,7 +48,7 @@ export default function RootLayout() {
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <StatusBar style="auto" />
       <Stack
         screenOptions={{ headerShown: false }}
@@ -51,22 +56,30 @@ export default function RootLayout() {
       >
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen 
-          name="match/[id]" 
-          options={{ 
+        <Stack.Screen
+          name="match/[id]"
+          options={{
             presentation: 'fullScreenModal',
             headerShown: false,
-          }} 
+          }}
         />
-        <Stack.Screen 
-          name="club/[id]" 
-          options={{ 
+        <Stack.Screen
+          name="club/[id]"
+          options={{
             headerShown: true,
             headerBackTitle: 'Back',
-          }} 
+          }}
+        />
+        <Stack.Screen
+          name="club/create"
+          options={{
+            headerShown: true,
+            headerTitle: 'Create Club',
+            presentation: 'modal',
+          }}
         />
       </Stack>
-    </>
+    </ErrorBoundary>
   );
 }
 

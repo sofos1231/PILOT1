@@ -28,6 +28,7 @@ interface ClubState {
   createClub: (data: CreateClubData) => Promise<Club>;
   joinClub: (clubId: string) => Promise<void>;
   leaveClub: (clubId: string) => Promise<void>;
+  setCurrentClub: (club: Club | null) => void;
   clearCurrentClub: () => void;
 }
 
@@ -122,6 +123,10 @@ export const useClubStore = create<ClubState>((set, get) => ({
     await clubsApi.leaveClub(clubId);
     await get().fetchMyClubs();
     set({ currentMembership: null });
+  },
+
+  setCurrentClub: (club: Club | null) => {
+    set({ currentClub: club });
   },
 
   clearCurrentClub: () => {

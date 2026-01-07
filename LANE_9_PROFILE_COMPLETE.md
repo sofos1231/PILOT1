@@ -1,3 +1,38 @@
+# 👤 LANE 9: PROFILE & USER DATA - COMPLETE
+## Fix Profile Screen to Show Real Data
+## Copy-Paste Ready Code
+
+---
+
+## OVERVIEW
+
+**Problem:**
+- Profile shows stale data (0 gold, "Player" name)
+- `authApi.getProfile()` exists but is never called
+- No way to refresh user data
+- WebSocket gold updates may not reflect in store
+
+**Solution:**
+- Call getProfile() on mount
+- Add pull-to-refresh
+- Display all user statistics
+- Update store with fresh data
+
+**Time:** 30 minutes
+
+**Prerequisites:**
+- Lane 8 complete
+- Backend running on port 8000
+
+---
+
+## PHASE 1: Update Profile Screen
+
+### Step 1.1: Replace profile.tsx
+
+Replace the entire contents of `app/(tabs)/profile.tsx`:
+
+```typescript
 import { useEffect, useState, useCallback } from 'react';
 import {
   View,
@@ -150,7 +185,7 @@ export default function ProfileTab() {
       {/* ==================== GOLD CARD ==================== */}
       <View style={styles.goldCard}>
         <View style={styles.goldIconContainer}>
-          <Ionicons name="diamond" size={28} color="#F59E0B" />
+          <Text style={styles.goldIcon}>🪙</Text>
         </View>
         <View style={styles.goldInfo}>
           <Text style={styles.goldLabel}>Gold Balance</Text>
@@ -448,6 +483,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  goldIcon: {
+    fontSize: 28,
+  },
   goldInfo: {
     flex: 1,
     marginLeft: 12,
@@ -615,3 +653,128 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
   },
 });
+```
+
+---
+
+## PHASE 2: Ensure authApi has getProfile
+
+### Step 2.1: Verify authApi.ts
+
+Check that `services/api/authApi.ts` has the `getProfile` function. If not, add it:
+
+```typescript
+// In services/api/authApi.ts, ensure this exists:
+
+getProfile: () =>
+  apiClient.get<{ success: boolean; user: User }>('/auth/profile'),
+```
+
+**Complete authApi.ts reference** (verify yours matches):
+
+```typescript
+import apiClient from './axiosInstance';
+import { User } from '../../store/authStore';
+
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  email: string;
+  username: string;
+  password: string;
+  country: string;
+  age_confirmed: boolean;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  user: User;
+  tokens: {
+    access_token: string;
+    refresh_token: string;
+  };
+}
+
+export const authApi = {
+  register: (data: RegisterRequest) =>
+    apiClient.post<AuthResponse>('/auth/register', data),
+
+  login: (data: LoginRequest) =>
+    apiClient.post<AuthResponse>('/auth/login', data),
+
+  logout: () =>
+    apiClient.post<{ success: boolean }>('/auth/logout'),
+
+  refreshToken: (refreshToken: string) =>
+    apiClient.post<{
+      success: boolean;
+      tokens: { access_token: string; refresh_token: string };
+    }>('/auth/refresh', { refresh_token: refreshToken }),
+
+  getProfile: () =>
+    apiClient.get<{ success: boolean; user: User }>('/auth/profile'),
+};
+
+export default authApi;
+```
+
+---
+
+## PHASE 3: Add setUser to Auth Store (if missing)
+
+### Step 3.1: Verify authStore has setUser
+
+The profile screen calls `setUser(data.user)`. Make sure your authStore exports this function.
+
+Check `store/authStore.ts` has:
+
+```typescript
+// In the interface:
+setUser: (user: User) => void;
+
+// In the implementation:
+setUser: (user) => set({ user }),
+```
+
+See Lane 8 for complete authStore.ts reference.
+
+---
+
+## ✅ LANE 9 VERIFICATION CHECKLIST
+
+After implementing, verify:
+
+- [ ] Profile screen loads without errors
+- [ ] Username displays correctly (not "Player")
+- [ ] Gold balance shows correct amount (not 0)
+- [ ] Level and XP display correctly
+- [ ] Game stats (matches, wins, losses) show real data
+- [ ] Gold stats (earned, spent) show real data
+- [ ] Account info (country, member since) displays
+- [ ] Pull-to-refresh updates all data
+- [ ] Logout button works
+
+---
+
+## 📁 FILES CREATED/MODIFIED
+
+| File | Action |
+|------|--------|
+| `app/(tabs)/profile.tsx` | REPLACE |
+| `services/api/authApi.ts` | VERIFY (add getProfile if missing) |
+| `store/authStore.ts` | VERIFY (add setUser if missing) |
+
+---
+
+## 🚀 READY FOR LANE 10
+
+After Lane 9 is complete:
+- Profile shows real user data
+- All statistics display correctly
+- Pull-to-refresh works
+- Gold balance is accurate
+
+Proceed to **Lane 10: Play Tab Completion**

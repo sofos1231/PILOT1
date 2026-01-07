@@ -14,6 +14,14 @@ export interface User {
   wins: number;
   losses: number;
   country: string | null;
+  total_gold_earned?: number;
+  total_gold_spent?: number;
+  is_active?: boolean;
+  is_banned?: boolean;
+  email_verified?: boolean;
+  last_daily_bonus_claim?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
 interface AuthState {

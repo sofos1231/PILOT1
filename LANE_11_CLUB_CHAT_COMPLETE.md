@@ -1,3 +1,39 @@
+# 💬 LANE 11: CLUB CHAT - COMPLETE
+## Wire Real-Time Club Chat
+## Copy-Paste Ready Code
+
+---
+
+## OVERVIEW
+
+**Problem:**
+- Club detail page says "Chat coming soon!"
+- WebSocket chat is fully implemented on backend
+- useClubSocket hook exists but not used
+- clubsApi.getChatHistory() never called
+
+**Solution:**
+- Add chat UI section to club detail
+- Load chat history on mount
+- Send messages via WebSocket
+- Display real-time incoming messages
+
+**Time:** 30 minutes
+
+**Prerequisites:**
+- Lanes 8-10 complete
+- Backend running on port 8000
+- WebSocket service connected
+
+---
+
+## PHASE 1: Update Club Detail Screen
+
+### Step 1.1: Replace club/[id].tsx
+
+Replace the entire contents of `app/club/[id].tsx`:
+
+```typescript
 import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
@@ -12,7 +48,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   FlatList,
-  Modal,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -51,7 +86,7 @@ export default function ClubDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState<'chat' | 'members' | 'tables'>('chat');
-
+  
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -68,14 +103,6 @@ export default function ClubDetailScreen() {
   const [myRole, setMyRole] = useState<'owner' | 'admin' | 'member' | null>(null);
   const [myChipBalance, setMyChipBalance] = useState(0);
 
-  // Tables state
-  const [tables, setTables] = useState<any[]>([]);
-  const [loadingTables, setLoadingTables] = useState(false);
-  const [refreshingTables, setRefreshingTables] = useState(false);
-  const [showCreateTableModal, setShowCreateTableModal] = useState(false);
-  const [tableStake, setTableStake] = useState('100');
-  const [creatingTable, setCreatingTable] = useState(false);
-
   // ==================== DATA FETCHING ====================
   const fetchClubDetails = useCallback(async () => {
     if (!id) return;
@@ -84,7 +111,7 @@ export default function ClubDetailScreen() {
       const { data } = await clubsApi.getClubById(id);
       if (data.success) {
         setCurrentClub(data.club);
-
+        
         // Check membership
         if (data.membership) {
           setIsMember(true);
@@ -155,31 +182,6 @@ export default function ClubDetailScreen() {
     }
   }, [activeTab, fetchMembers]);
 
-  // Fetch tables
-  const fetchTables = useCallback(async () => {
-    if (!id) return;
-
-    setLoadingTables(true);
-    try {
-      const { data } = await clubsApi.getTables(id);
-      if (data.success) {
-        setTables(data.tables || []);
-      }
-    } catch (error) {
-      console.error('Failed to load tables:', error);
-    } finally {
-      setLoadingTables(false);
-      setRefreshingTables(false);
-    }
-  }, [id]);
-
-  // Load tables when switching to tables tab
-  useEffect(() => {
-    if (activeTab === 'tables' && isMember) {
-      fetchTables();
-    }
-  }, [activeTab, isMember, fetchTables]);
-
   // ==================== WEBSOCKET ====================
   useEffect(() => {
     if (!id || !isMember) return;
@@ -225,7 +227,7 @@ export default function ClubDetailScreen() {
     try {
       // Send via WebSocket
       wsService.sendClubMessage(id, messageText);
-
+      
       // Optimistically add to local state
       const optimisticMessage: ChatMessage = {
         message_id: `temp-${Date.now()}`,
@@ -236,7 +238,7 @@ export default function ClubDetailScreen() {
         created_at: new Date().toISOString(),
       };
       setChatMessages((prev) => [...prev, optimisticMessage]);
-
+      
       // Scroll to bottom
       setTimeout(() => {
         chatScrollRef.current?.scrollToEnd({ animated: true });
@@ -258,9 +260,9 @@ export default function ClubDetailScreen() {
       if (data.success) {
         setIsMember(true);
         setMyRole('member');
-        setMyChipBalance(data.membership?.chip_balance || 0);
+        setMyChipBalance(data.chip_balance || 0);
         fetchClubDetails();
-        Alert.alert('Welcome!', `You joined ${currentClub?.name}!\n\nYou received ${data.membership?.chip_balance || 0} welcome chips.`);
+        Alert.alert('Welcome!', `You joined ${currentClub?.name}!\n\nYou received ${data.chip_balance || 0} welcome chips.`);
       }
     } catch (error: any) {
       Alert.alert('Error', error.response?.data?.error || 'Failed to join club');
@@ -308,83 +310,6 @@ export default function ClubDetailScreen() {
       default:
         return '#9CA3AF';
     }
-  };
-
-  // ==================== TABLE HANDLERS ====================
-  const handleRefreshTables = () => {
-    setRefreshingTables(true);
-    fetchTables();
-  };
-
-  const handleCreateTable = async () => {
-    if (!id) return;
-
-    const stake = parseInt(tableStake) || 100;
-
-    if (stake > myChipBalance) {
-      Alert.alert('Insufficient Chips', "You don't have enough chips for this stake.");
-      return;
-    }
-
-    setCreatingTable(true);
-    try {
-      const { data } = await clubsApi.createTable(id, stake);
-      if (data.success) {
-        setShowCreateTableModal(false);
-        setTableStake('100');
-        fetchTables();
-        Alert.alert('Table Created!', `Your table with ${stake} chip stake is ready. Waiting for opponent...`);
-      }
-    } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.error || 'Failed to create table');
-    } finally {
-      setCreatingTable(false);
-    }
-  };
-
-  const handleJoinTable = async (table: any) => {
-    Alert.alert(
-      'Join Table',
-      `Join this table for ${table.stake_amount} chips?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Join',
-          onPress: async () => {
-            try {
-              const { data } = await clubsApi.joinTable(id as string, table.table_id);
-              if (data.success && data.match_id) {
-                router.push(`/match/${data.match_id}`);
-              }
-            } catch (error: any) {
-              Alert.alert('Error', error.response?.data?.error || 'Failed to join table');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleCancelTable = async (tableId: string) => {
-    Alert.alert(
-      'Cancel Table',
-      'Are you sure you want to cancel this table?',
-      [
-        { text: 'No', style: 'cancel' },
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await clubsApi.deleteTable(id as string, tableId);
-              fetchTables();
-            } catch (error: any) {
-              Alert.alert('Error', error.response?.data?.error || 'Failed to cancel table');
-            }
-          },
-        },
-      ]
-    );
   };
 
   // ==================== RENDER ====================
@@ -445,7 +370,7 @@ export default function ClubDetailScreen() {
               </View>
               {isMember && (
                 <View style={styles.chipBadge}>
-                  <Text style={styles.chipText}>{myChipBalance.toLocaleString()} chips</Text>
+                  <Text style={styles.chipText}>💰 {myChipBalance.toLocaleString()}</Text>
                 </View>
               )}
             </View>
@@ -624,7 +549,7 @@ export default function ClubDetailScreen() {
                         <Text style={styles.roleBadgeText}>{member.role}</Text>
                       </View>
                       <Text style={styles.memberChips}>
-                        {member.chip_balance.toLocaleString()} chips
+                        💰 {member.chip_balance.toLocaleString()}
                       </Text>
                     </View>
                   </View>
@@ -638,169 +563,20 @@ export default function ClubDetailScreen() {
         {/* ==================== TABLES TAB ==================== */}
         {isMember && activeTab === 'tables' && (
           <View style={styles.tablesContainer}>
-            {/* Create Table Button */}
-            <TouchableOpacity
-              style={styles.createTableHeader}
-              onPress={() => setShowCreateTableModal(true)}
-            >
-              <View style={styles.createTableIcon}>
-                <Ionicons name="add-circle" size={24} color="#667eea" />
-              </View>
-              <View style={styles.createTableInfo}>
-                <Text style={styles.createTableTitle}>Create New Table</Text>
-                <Text style={styles.createTableSubtitle}>Start a game with club members</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-            </TouchableOpacity>
-
-            {/* Tables List */}
-            <ScrollView
-              style={styles.tablesList}
-              refreshControl={
-                <RefreshControl refreshing={refreshingTables} onRefresh={handleRefreshTables} />
-              }
-            >
-              {loadingTables ? (
-                <ActivityIndicator style={{ padding: 32 }} color="#667eea" />
-              ) : tables.length === 0 ? (
-                <View style={styles.tablesEmpty}>
-                  <Ionicons name="grid-outline" size={48} color="#D1D5DB" />
-                  <Text style={styles.tablesEmptyText}>No active tables</Text>
-                  <Text style={styles.tablesEmptySubtext}>
-                    Create a table to start playing!
-                  </Text>
-                </View>
-              ) : (
-                tables.map((table) => (
-                  <View key={table.table_id} style={styles.tableCard}>
-                    <View style={styles.tableLeft}>
-                      <View style={styles.tableIconContainer}>
-                        <Ionicons name="game-controller" size={24} color="#667eea" />
-                      </View>
-                      <View style={styles.tableInfo}>
-                        <Text style={styles.tableStake}>{table.stake_amount} chips</Text>
-                        <Text style={styles.tableStatus}>
-                          {table.status === 'waiting' ? 'Waiting for player...' :
-                           table.status === 'playing' ? 'Game in progress' : table.status}
-                        </Text>
-                        <Text style={styles.tableCreator}>
-                          Created by {table.creator_username || 'Unknown'}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.tableRight}>
-                      {table.status === 'waiting' && table.creator_id !== user?.user_id ? (
-                        <TouchableOpacity
-                          style={styles.joinTableButton}
-                          onPress={() => handleJoinTable(table)}
-                        >
-                          <Text style={styles.joinTableButtonText}>Join</Text>
-                        </TouchableOpacity>
-                      ) : table.status === 'waiting' && table.creator_id === user?.user_id ? (
-                        <TouchableOpacity
-                          style={styles.cancelTableButton}
-                          onPress={() => handleCancelTable(table.table_id)}
-                        >
-                          <Text style={styles.cancelTableButtonText}>Cancel</Text>
-                        </TouchableOpacity>
-                      ) : table.status === 'playing' ? (
-                        <View style={styles.playingBadge}>
-                          <Text style={styles.playingBadgeText}>Playing</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                  </View>
-                ))
-              )}
-              <View style={{ height: 100 }} />
-            </ScrollView>
-
-            {/* Create Table Modal */}
-            <Modal
-              visible={showCreateTableModal}
-              transparent
-              animationType="slide"
-              onRequestClose={() => setShowCreateTableModal(false)}
-            >
-              <View style={styles.modalOverlay}>
-                <View style={styles.modalContent}>
-                  <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>Create Table</Text>
-                    <TouchableOpacity onPress={() => setShowCreateTableModal(false)}>
-                      <Ionicons name="close" size={24} color="#6B7280" />
-                    </TouchableOpacity>
-                  </View>
-
-                  <Text style={styles.modalSubtitle}>
-                    Set the chip stake for this table. Players must have enough chips to join.
-                  </Text>
-
-                  {/* Stake Options */}
-                  <View style={styles.stakeOptions}>
-                    {[100, 500, 1000, 5000].map((amount) => (
-                      <TouchableOpacity
-                        key={amount}
-                        style={[
-                          styles.stakeOption,
-                          tableStake === String(amount) && styles.stakeOptionSelected,
-                        ]}
-                        onPress={() => setTableStake(String(amount))}
-                      >
-                        <Text
-                          style={[
-                            styles.stakeOptionText,
-                            tableStake === String(amount) && styles.stakeOptionTextSelected,
-                          ]}
-                        >
-                          {amount}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Custom Input */}
-                  <TextInput
-                    style={styles.stakeInput}
-                    placeholder="Or enter custom amount"
-                    placeholderTextColor="#9CA3AF"
-                    value={tableStake}
-                    onChangeText={(text) => setTableStake(text.replace(/[^0-9]/g, ''))}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                  />
-
-                  {/* Chip Balance */}
-                  <View style={styles.chipBalanceRow}>
-                    <Text style={styles.chipBalanceLabel}>Your chips:</Text>
-                    <Text style={styles.chipBalanceValue}>{myChipBalance.toLocaleString()}</Text>
-                  </View>
-
-                  {/* Warning */}
-                  {parseInt(tableStake) > myChipBalance && (
-                    <View style={styles.warningBox}>
-                      <Ionicons name="warning" size={18} color="#DC2626" />
-                      <Text style={styles.warningText}>Insufficient chips</Text>
-                    </View>
-                  )}
-
-                  {/* Create Button */}
-                  <TouchableOpacity
-                    style={[
-                      styles.createButton,
-                      (parseInt(tableStake) > myChipBalance || creatingTable) && styles.createButtonDisabled,
-                    ]}
-                    onPress={handleCreateTable}
-                    disabled={parseInt(tableStake) > myChipBalance || creatingTable}
-                  >
-                    {creatingTable ? (
-                      <ActivityIndicator color="white" />
-                    ) : (
-                      <Text style={styles.createButtonText}>Create Table</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </Modal>
+            <View style={styles.tablesEmpty}>
+              <Ionicons name="grid-outline" size={48} color="#D1D5DB" />
+              <Text style={styles.tablesEmptyText}>No tables yet</Text>
+              <Text style={styles.tablesEmptySubtext}>
+                Create a table to start playing!
+              </Text>
+              <TouchableOpacity
+                style={styles.createTableButton}
+                onPress={() => Alert.alert('Coming Soon', 'Table creation coming in Lane 12!')}
+              >
+                <Ionicons name="add" size={20} color="white" />
+                <Text style={styles.createTableButtonText}>Create Table</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </KeyboardAvoidingView>
@@ -1139,7 +915,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
-    marginTop: 40,
   },
   tablesEmptyText: {
     fontSize: 16,
@@ -1152,239 +927,99 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'center',
   },
-
-  // Tables Header
-  createTableHeader: {
+  createTableButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'white',
-    margin: 16,
-    padding: 16,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  createTableIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#EEF2FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  createTableInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  createTableTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  createTableSubtitle: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-
-  // Tables List
-  tablesList: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  tableCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: 'white',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  tableLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  tableIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#EEF2FF',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tableInfo: {
-    marginLeft: 12,
-    flex: 1,
-  },
-  tableStake: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1F2937',
-  },
-  tableStatus: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 2,
-  },
-  tableCreator: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    marginTop: 2,
-  },
-  tableRight: {},
-  joinTableButton: {
+    gap: 6,
     backgroundColor: '#667eea',
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 16,
-  },
-  joinTableButtonText: {
-    color: 'white',
-    fontWeight: '600',
-  },
-  cancelTableButton: {
-    backgroundColor: '#FEE2E2',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 16,
-  },
-  cancelTableButtonText: {
-    color: '#DC2626',
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  playingBadge: {
-    backgroundColor: '#D1FAE5',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-  },
-  playingBadgeText: {
-    color: '#059669',
-    fontWeight: '600',
-    fontSize: 12,
-  },
-
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#1F2937',
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 20,
-  },
-  stakeOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  stakeOption: {
-    flex: 1,
-    minWidth: '45%',
     paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
-    alignItems: 'center',
-  },
-  stakeOptionSelected: {
-    borderColor: '#667eea',
-    backgroundColor: '#EEF2FF',
-  },
-  stakeOptionText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  stakeOptionTextSelected: {
-    color: '#667eea',
-  },
-  stakeInput: {
-    backgroundColor: '#F3F4F6',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginTop: 16,
-    fontSize: 16,
-    textAlign: 'center',
-    color: '#1F2937',
-  },
-  chipBalanceRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 16,
-  },
-  chipBalanceLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  chipBalanceValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  warningBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: '#FEE2E2',
-    padding: 10,
-    borderRadius: 8,
-    marginTop: 12,
-  },
-  warningText: {
-    color: '#DC2626',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  createButton: {
-    backgroundColor: '#667eea',
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: 'center',
+    borderRadius: 20,
     marginTop: 20,
   },
-  createButtonDisabled: {
-    backgroundColor: '#D1D5DB',
-  },
-  createButtonText: {
+  createTableButtonText: {
     color: 'white',
-    fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
   },
 });
+```
+
+---
+
+## PHASE 2: Add WebSocket Methods
+
+### Step 2.1: Ensure wsService has club methods
+
+Check `services/websocket.ts` has these methods:
+
+```typescript
+joinClub(clubId: string) {
+  if (this.socket?.connected) {
+    this.socket.emit('join_club', { club_id: clubId });
+  }
+}
+
+leaveClub(clubId: string) {
+  if (this.socket?.connected) {
+    this.socket.emit('leave_club', { club_id: clubId });
+  }
+}
+
+sendClubMessage(clubId: string, message: string) {
+  if (this.socket?.connected) {
+    this.socket.emit('club_chat_message', { club_id: clubId, message });
+  }
+}
+```
+
+### Step 2.2: Add getChatHistory to clubsApi
+
+Check `services/api/clubsApi.ts` has:
+
+```typescript
+getChatHistory: (clubId: string, limit?: number) =>
+  apiClient.get<{ success: boolean; messages: any[] }>(
+    `/clubs/${clubId}/chat`,
+    { params: { limit } }
+  ),
+```
+
+---
+
+## ✅ LANE 11 VERIFICATION CHECKLIST
+
+After implementing, verify:
+
+- [ ] Club detail page loads without errors
+- [ ] Non-members see "Join Club" prompt
+- [ ] Members see tab bar (Chat, Members, Tables)
+- [ ] Chat tab shows message history
+- [ ] Can type and send messages
+- [ ] Messages appear immediately (optimistic update)
+- [ ] Other users' messages appear in real-time
+- [ ] Members tab shows list of members with roles
+- [ ] Tables tab shows empty state with create button
+- [ ] Chip balance displays in header
+- [ ] Leave club button works
+
+---
+
+## 📁 FILES CREATED/MODIFIED
+
+| File | Action |
+|------|--------|
+| `app/club/[id].tsx` | REPLACE |
+| `services/websocket.ts` | VERIFY/UPDATE |
+| `services/api/clubsApi.ts` | VERIFY/UPDATE |
+
+---
+
+## 🚀 READY FOR LANE 12
+
+After Lane 11 is complete:
+- Club chat is fully functional
+- Real-time messages work
+- Members list displays
+- Tables tab ready for Lane 12
+
+Proceed to **Lane 12: Club Tables & Games**

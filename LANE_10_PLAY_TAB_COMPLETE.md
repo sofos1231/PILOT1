@@ -1,3 +1,39 @@
+# 🎮 LANE 10: PLAY TAB COMPLETION - COMPLETE
+## Wire Match History & Button Functionality
+## Copy-Paste Ready Code
+
+---
+
+## OVERVIEW
+
+**Problem:**
+- Match history says "No matches yet" (hardcoded)
+- `matchApi.getHistory()` is never called
+- Practice button does nothing
+- Private Match button does nothing
+
+**Solution:**
+- Call getHistory() on mount
+- Display real match history
+- Wire Practice button to show "Coming Soon"
+- Wire Private Match button to show "Coming Soon"
+- Add pull-to-refresh
+
+**Time:** 45 minutes
+
+**Prerequisites:**
+- Lane 8-9 complete
+- Backend running on port 8000
+
+---
+
+## PHASE 1: Replace Play Tab (index.tsx)
+
+### Step 1.1: Replace entire index.tsx
+
+Replace the entire contents of `app/(tabs)/index.tsx`:
+
+```typescript
 import { useEffect, useState, useCallback } from 'react';
 import {
   View,
@@ -191,7 +227,7 @@ export default function PlayTab() {
 
   const handlePractice = () => {
     Alert.alert(
-      'Practice Mode',
+      '🤖 Practice Mode',
       'Play against our AI opponent to improve your skills!\n\nThis feature is coming soon in a future update.',
       [{ text: 'OK', style: 'default' }]
     );
@@ -199,7 +235,7 @@ export default function PlayTab() {
 
   const handlePrivateMatch = () => {
     Alert.alert(
-      'Private Match',
+      '👥 Private Match',
       'Challenge your friends to a private match!\n\nThis feature is coming soon in a future update.',
       [{ text: 'OK', style: 'default' }]
     );
@@ -211,7 +247,7 @@ export default function PlayTab() {
     } else {
       // Show match details for completed matches
       Alert.alert(
-        match.result === 'win' ? 'Victory!' : 'Defeat',
+        match.result === 'win' ? '🏆 Victory!' : '😔 Defeat',
         `vs ${match.opponent_username}\nStake: ${match.stake_amount.toLocaleString()} gold\n${
           match.result === 'win'
             ? `Won: +${match.gold_change.toLocaleString()} gold`
@@ -256,7 +292,7 @@ export default function PlayTab() {
               <Text style={styles.username}>{user?.username || 'Player'}!</Text>
             </View>
             <View style={styles.goldBadge}>
-              <Text style={styles.goldText}>{(user?.gold_balance || 0).toLocaleString()} Gold</Text>
+              <Text style={styles.goldText}>🪙 {(user?.gold_balance || 0).toLocaleString()}</Text>
             </View>
           </View>
 
@@ -392,7 +428,7 @@ export default function PlayTab() {
                       <View style={styles.matchInfo}>
                         <Text style={styles.matchOpponent}>vs {match.opponent_username}</Text>
                         <Text style={styles.matchDetails}>
-                          {match.stake_amount.toLocaleString()} gold - {match.your_color}
+                          {match.stake_amount.toLocaleString()} gold • {match.your_color}
                         </Text>
                         <Text style={styles.matchDate}>
                           {new Date(match.created_at).toLocaleDateString()}
@@ -416,7 +452,7 @@ export default function PlayTab() {
                           ]}
                         >
                           {match.gold_change >= 0 ? '+' : ''}
-                          {match.gold_change.toLocaleString()}
+                          {match.gold_change.toLocaleString()} 🪙
                         </Text>
                       )}
                       {match.result === 'ongoing' && (
@@ -443,7 +479,7 @@ export default function PlayTab() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Quick Match</Text>
+              <Text style={styles.modalTitle}>⚡ Quick Match</Text>
               <TouchableOpacity onPress={() => setShowStakeModal(false)}>
                 <Ionicons name="close" size={24} color="#6B7280" />
               </TouchableOpacity>
@@ -468,7 +504,7 @@ export default function PlayTab() {
                       stake === String(amount) && styles.stakeOptionTextSelected,
                     ]}
                   >
-                    {amount.toLocaleString()}
+                    🪙 {amount.toLocaleString()}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -492,7 +528,7 @@ export default function PlayTab() {
             <View style={styles.balanceInfo}>
               <Text style={styles.balanceLabel}>Your balance:</Text>
               <Text style={styles.balanceValue}>
-                {(user?.gold_balance || 0).toLocaleString()} Gold
+                🪙 {(user?.gold_balance || 0).toLocaleString()}
               </Text>
             </View>
 
@@ -995,3 +1031,90 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+```
+
+---
+
+## PHASE 2: Verify API Imports
+
+### Step 2.1: Ensure matchApi has getHistory
+
+Check `services/api/matchApi.ts` has:
+
+```typescript
+getHistory: (limit?: number) =>
+  apiClient.get<{ success: boolean; matches: any[] }>('/matches/user/history', {
+    params: { limit },
+  }),
+```
+
+### Step 2.2: Ensure matchmakingApi exists
+
+Check `services/api/matchmakingApi.ts` has:
+
+```typescript
+joinQueue: (stakeAmount: number, matchType?: 'gold' | 'club', clubId?: string) =>
+  apiClient.post<{
+    success: boolean;
+    matched: boolean;
+    match_id?: string;
+    opponent?: { user_id: string; username: string; level: number; wins: number };
+    queue_position?: number;
+    estimated_wait?: number;
+  }>('/matchmaking/join', {
+    stake_amount: stakeAmount,
+    match_type: matchType,
+    club_id: clubId,
+  }),
+
+leaveQueue: () =>
+  apiClient.post<{ success: boolean; cancelled: boolean }>('/matchmaking/leave'),
+```
+
+### Step 2.3: Ensure wsService has event subscription
+
+Check `services/websocket.ts` has an `on` method for subscribing to events.
+
+---
+
+## ✅ LANE 10 VERIFICATION CHECKLIST
+
+After implementing, verify:
+
+- [ ] Play tab loads without errors
+- [ ] Welcome card shows correct username and stats
+- [ ] Quick Match button opens stake modal
+- [ ] Stake options (100, 500, 1000, 5000) are selectable
+- [ ] Custom stake input works
+- [ ] Insufficient gold warning shows when appropriate
+- [ ] "Find Match" button joins queue
+- [ ] Cancel search button works
+- [ ] Match history loads from API (or shows empty state)
+- [ ] Recent matches display opponent name, result, gold change
+- [ ] Clicking ongoing match navigates to match screen
+- [ ] Practice button shows "Coming Soon" alert
+- [ ] Private Match button shows "Coming Soon" alert
+- [ ] Pull-to-refresh updates match history
+
+---
+
+## 📁 FILES CREATED/MODIFIED
+
+| File | Action |
+|------|--------|
+| `app/(tabs)/index.tsx` | REPLACE |
+| `services/api/matchApi.ts` | VERIFY |
+| `services/api/matchmakingApi.ts` | VERIFY |
+| `services/websocket.ts` | VERIFY |
+
+---
+
+## 🚀 READY FOR LANE 11
+
+After Lane 10 is complete:
+- Play tab shows real match history
+- Quick Match flow works end-to-end
+- Searching state with cancel works
+- Practice/Private buttons show coming soon
+
+Proceed to **Lane 11: Club Chat**
